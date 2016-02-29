@@ -146,3 +146,10 @@ also sorts.  You can combine `--add` and `--delete` as well.
 ## What are the default sort rules?
 
 TODO
+
+## Other projects
+
+**Python:** If all you are interested in is sorting, and your code is
+Python-only, you may be interested in
+[isort](https://github.com/timothycrosley/isort), which provides
+features not found in fix-includes.
