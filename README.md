@@ -142,6 +142,9 @@ sort and organize the include lines as well.  Or you can run
 to add `line` as an include-line to all specified files.  Again, this
 also sorts.  You can combine `--add` and `--delete` as well.
 
+*Transitional*: Until I am done integrating js and python into 
+fix_includes.py, there are separate files for them: fix_js_requires.py
+and fix_python_imports.py.
 
 ## What are the default sort rules?
 
