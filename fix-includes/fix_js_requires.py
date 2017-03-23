@@ -891,7 +891,7 @@ def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind):
   first_reorder_spans = {}
   last_reorder_spans = {}
   for reorder_span in good_reorder_spans:
-    if reorder_span[1] >= first_contentful_line_num:
+    if reorder_span[1] > first_contentful_line_num:
       continue
     for line_number in apply(xrange, reorder_span):
       line_kind = _GetLineKind(file_lines[line_number])

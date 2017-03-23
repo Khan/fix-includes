@@ -160,7 +160,7 @@ _COMMENT_RE = re.compile(r'\s*#.*')
 # start with ^, so they match at the beginning of a line.  You should
 # avoid the case where two regexp's can make the same line.
 
-_DOCSTRING_COMMENT_RE = re.compile(r'^""".*?"""')
+_DOCSTRING_COMMENT_RE = re.compile(r'^""".*?"""', re.DOTALL)
 _COMMENT_LINE_RE = re.compile(r'^\s*#.*', re.M)
 # This is surprisingly complicated due to how ^ and $ work with re.M
 _BLANK_LINE_RE = re.compile(r'^[^\S\r\n]*(\r\n|\r|\n)|^\s+$', re.M)
@@ -837,11 +837,12 @@ def _GetLineKind(file_line):
   # being imported.  If multiple modules are imported on one import
   # line, we sort based on the first module listed.
   key = file_line.key.split(',')[0].strip()
-  if key.startswith('__future__'):
+  first_module = key.split(' ')[0].split('.')[0]
+  if first_module == '__future__':
     return _FUTURE_IMPORT_KIND
-  if key.startswith(('third_party', 'google', 'jinja2', 'webapp2', 'mock')):
+  if first_module in ('third_party', 'google', 'jinja2', 'webapp2', 'mock'):
     return _THIRD_PARTY_IMPORT_KIND
-  if key in _SYSTEM_MODULES:
+  if first_module in _SYSTEM_MODULES:
     return _SYSTEM_IMPORT_KIND
   return _FIRST_PARTY_IMPORT_KIND
 
@@ -888,7 +889,7 @@ def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind):
   first_reorder_spans = {}
   last_reorder_spans = {}
   for reorder_span in good_reorder_spans:
-    if reorder_span[1] >= first_contentful_line_num:
+    if reorder_span[1] > first_contentful_line_num:
       continue
     for line_number in apply(xrange, reorder_span):
       line_kind = _GetLineKind(file_lines[line_number])
