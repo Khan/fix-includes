@@ -840,7 +840,8 @@ def _GetLineKind(file_line):
   first_module = key.split(' ')[0].split('.')[0]
   if first_module == '__future__':
     return _FUTURE_IMPORT_KIND
-  if first_module in ('third_party', 'google', 'jinja2', 'webapp2', 'mock'):
+  if first_module in ('third_party', 'google', 'shared',
+                      'jinja2', 'webapp2', 'mock', 'yaml'):
     return _THIRD_PARTY_IMPORT_KIND
   if first_module in _SYSTEM_MODULES:
     return _SYSTEM_IMPORT_KIND
