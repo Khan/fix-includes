@@ -840,8 +840,17 @@ def _GetLineKind(file_line):
   first_module = key.split(' ')[0].split('.')[0]
   if first_module == '__future__':
     return _FUTURE_IMPORT_KIND
-  if first_module in ('third_party', 'google', 'shared',
-                      'jinja2', 'webapp2', 'mock', 'yaml'):
+  if first_module in (
+      # These are in webapp, but we treat as third-party.
+      'third_party', 'shared',
+      # This is frankenserver (i.e. the App Engine SDK)
+      'google',
+      # These are from frankenserver's lib/ directory
+      # TODO(benkraft): Automatically add everything from lib/.
+      'jinja2', 'webapp2', 'webapp2_extras', 'yaml',
+      # This is from requirements.txt
+      # TODO(benkraft): Automatically add everything from requirements.txt.
+      'mock'):
     return _THIRD_PARTY_IMPORT_KIND
   if first_module in _SYSTEM_MODULES:
     return _SYSTEM_IMPORT_KIND
