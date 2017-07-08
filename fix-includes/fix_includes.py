@@ -2228,7 +2228,7 @@ def ProcessIWYUOutput(f, files_to_process, flags):
         break
     except FixIncludesError as why:
       print('ERROR: %s' % why)
-      continue
+      break
     filename = iwyu_record.filename
     if files_to_process is not None and filename not in files_to_process:
       print('(skipping %s: not listed on commandline)' % filename)
