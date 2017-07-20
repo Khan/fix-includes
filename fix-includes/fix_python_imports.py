@@ -115,6 +115,7 @@ will get merged together.
 
 import difflib
 import optparse
+import os
 import pipes  # For (undocumented) pipes.quote
 import pkgutil
 import re
@@ -819,11 +820,41 @@ _FIRST_PARTY_IMPORT_KIND = 4     # e.g. 'import foo'
 _EOF_KIND = 5                    # used at eof
 
 
-# This is a list of all system modules currently available.
-# It may not match the list of system modules when your code
-# (as opposed to when running this script) but should be close.
-_SYSTEM_MODULES = frozenset(list(sys.builtin_module_names) +
-                            [u[1] for u in pkgutil.iter_modules()])
+def _CategorizePath():
+  """Determine system and third-party modules from sys.path.
+
+  This is based on the value of sys.path; we unfortunately have to guess at
+  what is system vs. third-party vs. first-party.  We include all modules
+  currently available; it may not match the list of system modules when your
+  code (as opposed to when running this script) but should be close.  Returns a
+  pair of frozensets (system modules, third-party modules).
+
+  TODO(benkraft): This will ignore anything brought in by an import hook;
+  hopefully those are all first-party.
+  """
+  cwd = os.getcwd()
+  # We assume anything under the working directory is first-party.  (In
+  # _GetLineKind below we'll hardcode some prefixes where that's not
+  # applicable.)
+  non_first_party_path = [d for d in sys.path
+                          if d.startswith('/') and not d.startswith(cwd)]
+  # We assume directories involving "site-packages" and "dist-packages" are
+  # third-party, and everything else is system.
+  third_party_path = [d for d in non_first_party_path
+                      if 'site-packages' in d or 'dist-packages' in d]
+  system_path = list(set(non_first_party_path) - set(third_party_path))
+
+  # Now we look at all the modules on each part of the path, and add builtins
+  # to the system ones.
+  system_path_modules = frozenset(
+    list(sys.builtin_module_names) +
+    [u[1] for u in pkgutil.iter_modules(system_path)])
+  third_party_path_modules = frozenset(
+    [u[1] for u in pkgutil.iter_modules(third_party_path)])
+  return system_path_modules, third_party_path_modules
+
+
+_SYSTEM_MODULES, _THIRD_PARTY_MODULES = _CategorizePath()
 
 
 def _GetLineKind(file_line):
@@ -840,20 +871,17 @@ def _GetLineKind(file_line):
   first_module = key.split(' ')[0].split('.')[0]
   if first_module == '__future__':
     return _FUTURE_IMPORT_KIND
-  if first_module in (
+  elif first_module in (
       # These are in webapp, but we treat as third-party.
       'third_party', 'shared',
-      # This is frankenserver (i.e. the App Engine SDK)
-      'google',
-      # These are from frankenserver's lib/ directory
-      # TODO(benkraft): Automatically add everything from lib/.
-      'jinja2', 'webapp2', 'webapp2_extras', 'yaml',
-      # This is from requirements.txt
-      # TODO(benkraft): Automatically add everything from requirements.txt.
-      'mock'):
+      # This isn't on our sys.path in this script,
+      # so we need to handle it explicitly.
+      'google'):
     return _THIRD_PARTY_IMPORT_KIND
-  if first_module in _SYSTEM_MODULES:
+  elif first_module in _SYSTEM_MODULES:
     return _SYSTEM_IMPORT_KIND
+  elif first_module in _THIRD_PARTY_MODULES:
+    return _THIRD_PARTY_IMPORT_KIND
   return _FIRST_PARTY_IMPORT_KIND
 
 
