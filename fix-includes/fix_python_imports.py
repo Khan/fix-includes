@@ -830,28 +830,50 @@ def _CategorizePath():
   pair of frozensets (system modules, third-party modules).
 
   TODO(benkraft): This will ignore anything brought in by an import hook;
-  hopefully those are all first-party.
+  hopefully those are all first-party or are for children of modules we
+  classify correctly.
+  TODO(benkraft): Make a better effort to use what we think the operand file's
+  sys.path would be, rather than whatever ours happens to be.
   """
-  cwd = os.getcwd()
-  # We assume anything under the working directory is first-party.  (In
-  # _GetLineKind below we'll hardcode some prefixes where that's not
-  # applicable.)
-  non_first_party_path = [d for d in sys.path
-                          if d.startswith('/') and not d.startswith(cwd)]
-  # We assume directories involving "site-packages" and "dist-packages" are
-  # third-party, and everything else is system.
-  third_party_path = [d for d in non_first_party_path
-                      if 'site-packages' in d or 'dist-packages' in d]
-  system_path = list(set(non_first_party_path) - set(third_party_path))
+  try:
+    # Super duper KA/webapp specific hack!  We need to do the same path-munging
+    # appengine would do, so our path looks right.
+    import tools.appengine_tool_setup
+    tools.appengine_tool_setup.fix_sys_path()
+  except Exception:
+    pass
 
-  # Now we look at all the modules on each part of the path, and add builtins
-  # to the system ones.
-  system_path_modules = frozenset(
-    list(sys.builtin_module_names) +
-    [u[1] for u in pkgutil.iter_modules(system_path)])
-  third_party_path_modules = frozenset(
-    [u[1] for u in pkgutil.iter_modules(third_party_path)])
-  return system_path_modules, third_party_path_modules
+  cwd = os.getcwd()
+  # builtins don't show up in iter_modules, so we handle them specially.
+  system_modules = set(sys.builtin_module_names)
+  third_party_modules = set()
+
+  for module_loader, name, ispkg in pkgutil.iter_modules():
+    try:
+      filename = module_loader.find_module(name).get_filename()
+      path_parts = filename.split(os.sep)
+    except Exception as e:
+      # implementing get_filename() is not mandatory, so it may not work on
+      # custom module loaders.  We just make some guesses, namely assuming that
+      # the module name is kinda like a filename.
+      print "WARNING: Couldn't determine filename for %s, got %s" % (name, e)
+      filename = name
+      path_parts = name.split('.')
+    if os.path.isabs(filename) and not filename.startswith(cwd):
+      # An absolute, non-CWD-relative path.  If the directory looks like a
+      # pip/virtualenv directory, it's a third-party module; otherwise it's
+      # first-party.  Otherwise, it's hopefully system.
+      if 'site-packages' in path_parts or 'dist-packages' in path_parts:
+        third_party_modules.add(name)
+      else:
+        system_modules.add(name)
+    elif 'shared' in path_parts or 'third_party' in path_parts:
+      # If the directory is called "shared" or "third_party", we assume it's
+      # some sort of vendored third-party thing, even though it's in the
+      # current directory.  ("shared" being third-party is KA-specific.)
+      third_party_modules.add(name)
+
+  return frozenset(system_modules), frozenset(third_party_modules)
 
 
 _SYSTEM_MODULES, _THIRD_PARTY_MODULES = _CategorizePath()
@@ -871,13 +893,6 @@ def _GetLineKind(file_line):
   first_module = key.split(' ')[0].split('.')[0]
   if first_module == '__future__':
     return _FUTURE_IMPORT_KIND
-  elif first_module in (
-      # These are in webapp, but we treat as third-party.
-      'third_party', 'shared',
-      # This isn't on our sys.path in this script,
-      # so we need to handle it explicitly.
-      'google'):
-    return _THIRD_PARTY_IMPORT_KIND
   elif first_module in _SYSTEM_MODULES:
     return _SYSTEM_IMPORT_KIND
   elif first_module in _THIRD_PARTY_MODULES:
