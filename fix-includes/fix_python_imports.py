@@ -161,7 +161,7 @@ _COMMENT_RE = re.compile(r'\s*#.*')
 # start with ^, so they match at the beginning of a line.  You should
 # avoid the case where two regexp's can make the same line.
 
-_DOCSTRING_COMMENT_RE = re.compile(r'^""".*?"""', re.DOTALL)
+_DOCSTRING_COMMENT_RE = re.compile(r'^""".*?"""', re.DOTALL | re.M)
 _COMMENT_LINE_RE = re.compile(r'^\s*#.*', re.M)
 # This is surprisingly complicated due to how ^ and $ work with re.M
 _BLANK_LINE_RE = re.compile(r'^[^\S\r\n]*(\r\n|\r|\n)|^\s+$', re.M)
