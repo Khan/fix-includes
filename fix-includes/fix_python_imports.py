@@ -859,7 +859,11 @@ def _CategorizePath():
       print "WARNING: Couldn't determine filename for %s, got %s" % (name, e)
       filename = name
       path_parts = name.split('.')
-    if os.path.isabs(filename) and not filename.startswith(cwd):
+    if name == 'argparse':
+      # Annoying special case: the GAE sdk has its own copy of
+      # argparse, making it seem like third-party code.
+      system_modules.add(name)
+    elif os.path.isabs(filename) and not filename.startswith(cwd):
       # An absolute, non-CWD-relative path.  If the directory looks like a
       # pip/virtualenv directory, it's a third-party module; otherwise it's
       # first-party.  Otherwise, it's hopefully system.
