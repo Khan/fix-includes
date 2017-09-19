@@ -1066,7 +1066,7 @@ def _DeleteLinesAccordingToChangeRecord(change_record, file_lines):
   lines_to_delete = []
   for (i, file_line) in enumerate(file_lines):
     for s in change_record.substrings_of_lines_to_delete:
-      if s in file_line.line:
+      if file_line.line and s in file_line.line:
         lines_to_delete.append(i)
 
   for line_number in lines_to_delete:
