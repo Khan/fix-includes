@@ -262,7 +262,7 @@ class ChangeRecordParser(object):
         continue
 
       if record_type == self._REMOVE_RE:
-        retval.imports_to_add.remove(line)
+        retval.substrings_of_lines_to_delete.add(line)
         continue
 
       m = self._ADD_RE.match(line)
