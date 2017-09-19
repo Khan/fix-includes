@@ -169,9 +169,8 @@ _BLANK_LINE_RE = re.compile(r'^[^\S\r\n]*(\r\n|\r|\n)|^\s+$', re.M)
 # import.  This is annoying because of line continuations, which can
 # either have a \ at the end of the line or parens.  (Luckily, nested
 # parens are unlikely.)
-_IMPORT_RE = re.compile(
-  r'^\s*(?:import|from)\s*([^\\(\n]*(?:\\\n.*|\([^)]*\))*)',
-  re.M)
+_IMPORT_RE = re.compile(r'^(?:import|from)\s*([^\\(\n]*(?:\\\n.*|\([^)]*\))*)',
+                        re.M)
 # This 'fake' re is used when an import spans multiple lines:
 #   from my_very_important_module import (
 #       long_function_name_a, long_function_name_b)
