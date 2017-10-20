@@ -100,13 +100,16 @@ The input description consists of sections that look like so:
 and
 
    <filename> should remove these lines:
-   <substring matching line of text to be removed>
+   <substring matching line of text to be removed> OR <line number to remove>
    ...
    <blank line>
 
 The first line of text that includes the matching substring will be
 removed, along with the rest of its move span (so leading comments,
-blank lines, etc.)
+blank lines, etc.)  Instead of listed a substring you can list a
+number, which is taken to be the line number to delete.  (If you
+want to delete all lines matching a substring like "15", you're
+out of luck.)  Line numbers start at 1 for the first line.
 
 It is fine to specify the same filename in multiple sections; they
 will get merged together.
@@ -150,7 +153,7 @@ The input description consists of sections that look like so:
 and
 
    <filename> should remove these lines:
-   <substring matching line of text to be removed>
+   <substring matching line of text to be removed> OR <line number to remove>
    ...
    <blank line>
 """
@@ -193,7 +196,10 @@ class ChangeRecord(object):
     self.filename = filename
 
     self.imports_to_add = set()
-    self.substrings_of_lines_to_delete = set()
+    # Each element of this set is either a string or an int.
+    # If a string, we delete all lines matching that string.
+    # If an int, we delete that line-number.
+    self.substrings_or_indexes_of_lines_to_delete = set()
 
   def Merge(self, other):
     """Merges other with this one.  They must share a filename.
@@ -209,17 +215,18 @@ class ChangeRecord(object):
     """
     assert self.filename == other.filename, "Can't merge distinct files"
     self.imports_to_add.update(other.imports_to_add)
-    self.substrings_of_lines_to_delete.intersection_update(
-      other.substrings_of_lines_to_delete)
+    self.substrings_or_indexes_of_lines_to_delete.intersection_update(
+      other.substrings_or_indexes_of_lines_to_delete)
 
   def HasContentfulChanges(self):
     """Returns true iff this record has at least one add or delete."""
-    return bool(self.imports_to_add or self.substrings_of_lines_to_delete)
+    return bool(self.imports_to_add or
+                self.substrings_or_indexes_of_lines_to_delete)
 
   def __str__(self):
     return ('--- input record ---\n  FILENAME: %s\n'
             '  LINES TO DELETE: %s\n   TO ADD: %s\n---\n'
-            % (self.filename, self.substrings_of_lines_to_delete,
+            % (self.filename, self.substrings_or_indexes_of_lines_to_delete,
                self.imports_to_add))
 
 
@@ -262,7 +269,10 @@ class ChangeRecordParser(object):
         continue
 
       if record_type == self._REMOVE_RE:
-        retval.substrings_of_lines_to_delete.add(line)
+        if line.isdigit():     # the user entered a line-number
+          retval.substrings_or_indexes_of_lines_to_delete.add(int(line))
+        else:                  # the user entered a substring
+          retval.substrings_or_indexes_of_lines_to_delete.add(line)
         continue
 
       m = self._ADD_RE.match(line)
@@ -1064,9 +1074,19 @@ def _DecoratedMoveSpanLines(change_record, file_lines, move_span_lines):
 def _DeleteLinesAccordingToChangeRecord(change_record, file_lines):
   """Deletes all lines that change_record tells us to, and cleans up after."""
   lines_to_delete = []
+
+  # First, take the line-numbers the user asked for: the 'indexes' in
+  # substrings_or_indexes_of_lines_to_delete.  We can tell because
+  # they're ints.
+  for i in change_record.substrings_or_indexes_of_lines_to_delete:
+      if isinstance(i, int):           # s is an index, not a substring
+        lines_to_delete.append(i)
+
+  # Now take the 'substrings' in substrings_or_indexes_of_lines_to_delete
+  # and find out what lines they go with.
   for (i, file_line) in enumerate(file_lines):
-    for s in change_record.substrings_of_lines_to_delete:
-      if file_line.line and s in file_line.line:
+    for s in change_record.substrings_or_indexes_of_lines_to_delete:
+      if not isinstance(s, int) and file_line.line and s in file_line.line:
         lines_to_delete.append(i)
 
   for line_number in lines_to_delete:
