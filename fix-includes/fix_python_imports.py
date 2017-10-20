@@ -890,7 +890,8 @@ def _CategorizePath():
   return frozenset(system_modules), frozenset(third_party_modules)
 
 
-_SYSTEM_MODULES, _THIRD_PARTY_MODULES = _CategorizePath()
+_SYSTEM_MODULES = None
+_THIRD_PARTY_MODULES = None
 
 
 def _GetLineKind(file_line):
@@ -899,6 +900,10 @@ def _GetLineKind(file_line):
     return None
   if file_line.type not in (_IMPORT_RE, _IMPORT_CONTINUATION_RE):
     return None
+
+  global _SYSTEM_MODULES, _THIRD_PARTY_MODULES
+  if _SYSTEM_MODULES is None or _THIRD_PARTY_MODULES is None:
+    _SYSTEM_MODULES, _THIRD_PARTY_MODULES = _CategorizePath()
 
   # _IMPORT_(CONTINUATION_)RE has key that starts with the module
   # being imported.  If multiple modules are imported on one import
