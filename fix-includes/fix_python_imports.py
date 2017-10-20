@@ -830,7 +830,7 @@ _FIRST_PARTY_IMPORT_KIND = 4     # e.g. 'import foo'
 _EOF_KIND = 5                    # used at eof
 
 
-def _CategorizePath():
+def _CategorizePath(project_root):
   """Determine system and third-party modules from sys.path.
 
   This is based on the value of sys.path; we unfortunately have to guess at
@@ -853,7 +853,6 @@ def _CategorizePath():
   except Exception:
     pass
 
-  cwd = os.getcwd()
   # builtins don't show up in iter_modules, so we handle them specially.
   system_modules = set(sys.builtin_module_names)
   third_party_modules = set()
@@ -873,7 +872,7 @@ def _CategorizePath():
       # Annoying special case: the GAE sdk has its own copy of
       # argparse, making it seem like third-party code.
       system_modules.add(name)
-    elif os.path.isabs(filename) and not filename.startswith(cwd):
+    elif os.path.isabs(filename) and not filename.startswith(project_root):
       # An absolute, non-CWD-relative path.  If the directory looks like a
       # pip/virtualenv directory, it's a third-party module; otherwise it's
       # first-party.  Otherwise, it's hopefully system.
@@ -890,6 +889,8 @@ def _CategorizePath():
   return frozenset(system_modules), frozenset(third_party_modules)
 
 
+# TODO(csilvers): pass these through instead of making them global.
+# In theory they could change from run to run of fix_python_imports.
 _SYSTEM_MODULES = None
 _THIRD_PARTY_MODULES = None
 
@@ -900,10 +901,6 @@ def _GetLineKind(file_line):
     return None
   if file_line.type not in (_IMPORT_RE, _IMPORT_CONTINUATION_RE):
     return None
-
-  global _SYSTEM_MODULES, _THIRD_PARTY_MODULES
-  if _SYSTEM_MODULES is None or _THIRD_PARTY_MODULES is None:
-    _SYSTEM_MODULES, _THIRD_PARTY_MODULES = _CategorizePath()
 
   # _IMPORT_(CONTINUATION_)RE has key that starts with the module
   # being imported.  If multiple modules are imported on one import
@@ -1124,12 +1121,19 @@ def FixFileLines(change_record, file_lines, flags):
     file_lines: a list of LineInfo objects holding the parsed output of
       the file in change_record.filename
     flags: commandline flags, as parsed by optparse.  We use
-       flags.safe_headers to turn off deleting lines.
+       flags.safe_headers to turn off deleting lines, and
+       flags.root to figure out first-party vs third-party modules.
 
   Returns:
     An array of 'fixed' source code lines, after modifications as
     specified by the change-record.
   """
+  # We need to initialize the globals needed for _GetLineKind().
+  global _SYSTEM_MODULES, _THIRD_PARTY_MODULES
+  if _SYSTEM_MODULES is None or _THIRD_PARTY_MODULES is None:
+    _SYSTEM_MODULES, _THIRD_PARTY_MODULES = (
+      _CategorizePath(os.path.abspath(flags.root)))
+
   # First delete any lines we should delete.
   if not flags.safe_headers:
     _DeleteLinesAccordingToChangeRecord(change_record, file_lines)
@@ -1373,6 +1377,11 @@ def main(argv):
                           ' header files; just add new ones [default]'))
   parser.add_option('--nosafe_headers', action='store_false',
                     dest='safe_headers')
+
+  parser.add_option('--root', default='.',
+                    help=('The project-rootdir holding all the files you '
+                          'are fixing. This is needed to determine what '
+                          'imports are first-party vs third-party.'))
 
   parser.add_option('-s', '--sort_only', action='store_true',
                     help=('Just sort imports of files listed on cmdline;'
