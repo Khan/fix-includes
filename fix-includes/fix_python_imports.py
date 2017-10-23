@@ -889,13 +889,13 @@ def _CategorizePath(project_root):
   return frozenset(system_modules), frozenset(third_party_modules)
 
 
-# TODO(csilvers): pass these through instead of making them global.
-# In theory they could change from run to run of fix_python_imports.
-_SYSTEM_MODULES = None
-_THIRD_PARTY_MODULES = None
+# Map from options.root to list of modules.  (The value they have
+# depends on options.root.)
+_SYSTEM_MODULES = {}
+_THIRD_PARTY_MODULES = {}
 
 
-def _GetLineKind(file_line):
+def _GetLineKind(file_line, system_modules, third_party_modules):
   """Given a file_line + file being edited return best *_KIND value or None."""
   if file_line.deleted:
     return None
@@ -909,14 +909,15 @@ def _GetLineKind(file_line):
   first_module = key.split(' ')[0].split('.')[0]
   if first_module == '__future__':
     return _FUTURE_IMPORT_KIND
-  elif first_module in _SYSTEM_MODULES:
+  elif first_module in system_modules:
     return _SYSTEM_IMPORT_KIND
-  elif first_module in _THIRD_PARTY_MODULES:
+  elif first_module in third_party_modules:
     return _THIRD_PARTY_IMPORT_KIND
   return _FIRST_PARTY_IMPORT_KIND
 
 
-def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind):
+def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind,
+                          system_modules, third_party_modules):
   """Returns [start_line,end_line) of 1st reorder_span with line of kind kind.
 
   This function iterates over all the reorder_spans in file_lines, and
@@ -936,6 +937,7 @@ def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind):
        .reorder_span filled in.
     good_reorder_spans: a sorted list of reorder_spans to consider
     kind: one of *_KIND values.
+    system_modules, third_party_modules: from _CategorizePath().
 
   Returns:
     A pair of line numbers, [start_line, end_line), that is the 'best'
@@ -961,7 +963,8 @@ def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind):
     if reorder_span[1] > first_contentful_line_num:
       continue
     for line_number in apply(xrange, reorder_span):
-      line_kind = _GetLineKind(file_lines[line_number])
+      line_kind = _GetLineKind(file_lines[line_number],
+                               system_modules, third_party_modules)
       if line_kind is not None:
         first_reorder_spans.setdefault(line_kind, reorder_span)
         last_reorder_spans[line_kind] = reorder_span
@@ -996,7 +999,8 @@ def _FirstReorderSpanWith(file_lines, good_reorder_spans, kind):
   return (len(file_lines), len(file_lines))
 
 
-def _DecoratedMoveSpanLines(change_record, file_lines, move_span_lines):
+def _DecoratedMoveSpanLines(change_record, file_lines, move_span_lines,
+                            system_modules, third_party_modules):
   """Given a span of lines from file_lines, returns a "decorated" result.
 
   First, we construct the actual contents of the move-span, as a list
@@ -1024,6 +1028,7 @@ def _DecoratedMoveSpanLines(change_record, file_lines, move_span_lines):
     move_span_lines: A list of LineInfo objects.  For import lines
       already in the file, this will be a sub-list of file_lines.  For
       import-lines we're adding in, it will be a newly created list.
+    system_modules, third_party_modules: from _CategorizePath().
 
   Returns:
     A tuple (reorder_span, kind, sort_key, all_lines_as_list)
@@ -1060,7 +1065,7 @@ def _DecoratedMoveSpanLines(change_record, file_lines, move_span_lines):
                if not move_span_lines[i].deleted]
 
   # Next figure out the kind (first-party import, third-party import, etc).
-  kind = _GetLineKind(firstline)
+  kind = _GetLineKind(firstline, system_modules, third_party_modules)
 
   # All we're left to do is the reorder-span we're in.
   reorder_span = firstline.reorder_span
@@ -1068,7 +1073,8 @@ def _DecoratedMoveSpanLines(change_record, file_lines, move_span_lines):
     # TODO(csilvers): could make this more efficient by storing, per-kind.
     toplevel_reorder_spans = _GetToplevelReorderSpans(file_lines)
     reorder_span = _FirstReorderSpanWith(file_lines, toplevel_reorder_spans,
-                                         kind)
+                                         kind,
+                                         system_modules, third_party_modules)
 
   return (reorder_span, kind, sort_key, all_lines)
 
@@ -1129,10 +1135,11 @@ def FixFileLines(change_record, file_lines, flags):
     specified by the change-record.
   """
   # We need to initialize the globals needed for _GetLineKind().
-  global _SYSTEM_MODULES, _THIRD_PARTY_MODULES
-  if _SYSTEM_MODULES is None or _THIRD_PARTY_MODULES is None:
-    _SYSTEM_MODULES, _THIRD_PARTY_MODULES = (
+  if flags.root not in _SYSTEM_MODULES:
+    _SYSTEM_MODULES[flags.root], _THIRD_PARTY_MODULES[flags.root] = (
       _CategorizePath(os.path.abspath(flags.root)))
+  system_modules = _SYSTEM_MODULES[flags.root]
+  third_party_modules = _THIRD_PARTY_MODULES[flags.root]
 
   # First delete any lines we should delete.
   if not flags.safe_headers:
@@ -1147,8 +1154,9 @@ def FixFileLines(change_record, file_lines, flags):
   move_spans = set([fl.move_span for fl in file_lines if fl.move_span])
   decorated_move_spans = []
   for (start_line, end_line) in move_spans:
-    decorated_span = _DecoratedMoveSpanLines(change_record, file_lines,
-                                             file_lines[start_line:end_line])
+    decorated_span = _DecoratedMoveSpanLines(
+      change_record, file_lines, file_lines[start_line:end_line],
+      system_modules, third_party_modules)
     if decorated_span:
       decorated_move_spans.append(decorated_span)
 
@@ -1167,8 +1175,9 @@ def FixFileLines(change_record, file_lines, flags):
       li.key = key
     line_infos[0].type = _IMPORT_RE
 
-    decorated_span = _DecoratedMoveSpanLines(change_record, file_lines,
-                                             line_infos)
+    decorated_span = _DecoratedMoveSpanLines(
+      change_record, file_lines, line_infos,
+      system_modules, third_party_modules)
     assert decorated_span, 'line to add is not a import line?'
     decorated_move_spans.append(decorated_span)
 
