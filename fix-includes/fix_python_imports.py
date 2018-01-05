@@ -848,8 +848,8 @@ def _CategorizePath(project_root):
   try:
     # Super duper KA/webapp specific hack!  We need to do the same path-munging
     # appengine would do, so our path looks right.
-    import tools.appengine_tool_setup
-    tools.appengine_tool_setup.fix_sys_path()
+    import appengine.tool_setup
+    appengine.tool_setup.fix_sys_path()
   except Exception:
     pass
 
