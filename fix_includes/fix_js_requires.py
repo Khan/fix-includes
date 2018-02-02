@@ -1328,7 +1328,15 @@ def main(argv):
     return ProcessInput(sys.stdin, files_to_modify, flags)
 
 
-if __name__ == '__main__':
+def entrypoint():
+  """Wrapper for main() used by the commandline script when installed via pip.
+
+  See "console_scripts" in setup.py.
+  """
   num_files_fixed = main(sys.argv)
   # rc's of 128 and above are reserved by the shell.
   sys.exit(min(num_files_fixed, 127))
+
+
+if __name__ == '__main__':
+  entrypoint()

@@ -2390,6 +2390,14 @@ def main(argv):
     return ProcessIWYUOutput(sys.stdin, files_to_modify, flags)
 
 
-if __name__ == '__main__':
+def entrypoint():
+  """Wrapper for main() used by the commandline script when installed via pip.
+
+  See "console_scripts" in setup.py.
+  """
   num_files_fixed = main(sys.argv)
   sys.exit(min(num_files_fixed, 100))
+
+
+if __name__ == '__main__':
+  entrypoint()
